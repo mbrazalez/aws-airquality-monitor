@@ -1,0 +1,70 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Resources:
+  SeleniumFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      PackageType: Image
+      Architectures:
+        - x86_64
+      Timeout: 120
+      MemorySize: 2048
+    Metadata:
+      Dockerfile: Dockerfile
+      DockerContext: .
+      DockerTag: latest
+    Events:
+      ScheduleEvent:
+        Type: Schedule
+        Properties:
+          Schedule: rate(1 hour)
+          Input: '{"key1": "value1"}'
+          Description: 'Run every hour'
+          Enabled: true
+          Name: 'SeleniumFunctionSchedule'
+          State: 'ENABLED'
+          Targets:
+            - Id: 'SeleniumFunction'
+              Arn: !GetAtt SeleniumFunction.Arn
+              RoleArn: arn:aws:iam::463302649587:role/LabRole
+              Input: '{"key1": "value1"}'
+              InputPath: '$.detail'
+              InputTransformer:
+                InputPathsMap:
+                  key1: '$.key1'
+                InputTemplate: '{"key1": <value1>}'
+                OutputPathsMap:
+                  key1: '$.key1'
+                OutputTemplate: '{"key1": <value1>}'
+              RunCommand:
+                TimeoutSeconds: 60
+                Comment: 'Run every hour'
+                RetryPolicy:
+                  MaximumEventAgeInSeconds: 3600
+
+  # MyLambdaFunction:
+  #   Type: AWS::Serverless::Function
+  #   Properties:
+  #     PackageType: Image
+  #     Runtime: python3.12
+  #     Timeout: 120
+  #     Role: 'arn:aws:iam::463302649587:role/LabRole'
+  #   Metadata:
+  #     Dockerfile: Dockerfile
+  #     DockerContext: .
+  #     DockerTag: latest
+  #     Role: 'arn:aws:iam::463302649587:role/LabRole'
+  #   Events:
+        # ScheduleEvent:
+        #   Type: Schedule
+        #   Role: arn:aws:iam::463302649587:role/LabRole
+        #   Properties:
+        #     ScheduleExpression: rate(1 hour)
+    # MyFunction:
+    #   Type: AWS::Serverless::Function
+    #   Properties:
+    #     CodeUri: .
+    #     Handler: main.lambda_handler
+    #     Runtime: python3.12
+    #     Role: arn:aws:iam::400327223658:role/LabRole
+    #     Timeout: 120
