@@ -1,4 +1,4 @@
-venv
+pyenv
 .aws-sam
 samconfig.toml
 Propuesta
