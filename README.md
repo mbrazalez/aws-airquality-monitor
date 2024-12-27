@@ -1,5 +1,5 @@
-El objetivo de este proyecto será crear una arquitectura en AWS capaz de recolectar información relacionada con la calidad del aire a través del uso de web scraping. Para ello, utilizaremos la página web [troposfera.es](https://troposfera.es/datos/dev-albacete/#/dashboard) como fuente de datos. 
-En base a los datos recopilados, podremos monitorizar la calidad del aire en la ciudad de Albacete en tiempo real, lo cual se podría aplicar a casos de uso tales como un Sistema de Transporte Inteligente con el objetivo evitar los desplazamientos por zonas de alta contaminación atmosférica.
+El propósito de este proyecto es desarrollar una arquitectura en AWS que permita recolectar información sobre la calidad del aire mediante técnicas de web scraping. Utilizaremos el sitio web [troposfera.es](https://troposfera.es/datos/dev-albacete/#/dashboard) como nuestra principal fuente de datos. Con la información obtenida, podremos realizar un monitoreo en tiempo real de la calidad del aire en Albacete y generaremos un fichero con los valores obtenidas en los distintos puntos de la ciudad. 
+Este proyeco puede ser aplicable a múltiples casos de uso tales como un Sistema de Transporte Inteligente, con el fin de minimizar el tráfico o el tránsito de personas en áreas de la ciudad con alta contaminación atmosférica.
 
 ![AWS Architecture here](https://github.com/mbrazalez/aws-airquality-monitior/blob/main/diagrama.png)
 
