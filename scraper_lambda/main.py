@@ -1,11 +1,15 @@
 import os
 import time
+import boto3
+from datetime import datetime, timezone
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options as ChromeOptions
 from tempfile import mkdtemp
+
+table_name = os.environ['DYNAMODB_TABLE']
 
 def lambda_handler(event, context):
     # Set the path to the Chrome and ChromeDriver
@@ -70,6 +74,18 @@ def lambda_handler(event, context):
 
      # Close the WebDriver
     driver.quit()
+
+    # Save the data to DynamoDB
+    dynamodb = boto3.resource('dynamodb')
+    table = dynamodb.Table(table_name)
+    for data in scrapped_data:
+        table.put_item(
+            Item={
+                'station': data['station'],
+                'pm10': data['pm10'],
+                'timestamp': datetime.now(timezone.utc).isoformat()
+            }
+        )
 
     return {
             'statusCode': 200,

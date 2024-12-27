@@ -1,6 +1,50 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
+#########################################################################
+Parameters:
+  ## The endpoint that receives notifications ##
+  SubscriptionEndPoint:
+    Type: String
+    Description: The endpoint that receives notifications.
+  ## The subscription protocol ##
+  SubscriptionProtocol:
+    Type: String
+    Description: The subscription protocol
+    AllowedValues:
+    - http
+    - https
+    - email
+    - email-json
+    - sms
+    - sqs
+    - application
+    - lambda
+    Default: email
+
+#########################################################################
 Resources:
+  ## DynamoDB Table to store the air quality data ##
+  AirQualityDB:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: AirQualityDB
+      AttributeDefinitions:
+        - AttributeName: "station"
+          AttributeType: "S"
+        - AttributeName: "timestamp"
+          AttributeType: "S"
+      KeySchema:
+        - AttributeName: "station"
+          KeyType: "HASH"
+        - AttributeName: "timestamp"
+          KeyType: "RANGE"
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+      StreamSpecification:
+        StreamViewType: "NEW_IMAGE"
+
+  ## Lambda function to scrape the air quality data ##
   SeleniumFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -9,62 +53,60 @@ Resources:
         - x86_64
       Timeout: 120
       MemorySize: 2048
+      Events:
+        ScheduleEvent:
+          Type: ScheduleV2
+          Properties:
+            ScheduleExpression: "rate(24 hours)"
+      Environment:
+        Variables:
+          DYNAMODB_TABLE: !Ref AirQualityDB
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AirQualityDB
     Metadata:
       Dockerfile: Dockerfile
       DockerContext: .
       DockerTag: latest
-    Events:
-      ScheduleEvent:
-        Type: Schedule
-        Properties:
-          Schedule: rate(1 hour)
-          Input: '{"key1": "value1"}'
-          Description: 'Run every hour'
-          Enabled: true
-          Name: 'SeleniumFunctionSchedule'
-          State: 'ENABLED'
-          Targets:
-            - Id: 'SeleniumFunction'
-              Arn: !GetAtt SeleniumFunction.Arn
-              RoleArn: arn:aws:iam::463302649587:role/LabRole
-              Input: '{"key1": "value1"}'
-              InputPath: '$.detail'
-              InputTransformer:
-                InputPathsMap:
-                  key1: '$.key1'
-                InputTemplate: '{"key1": <value1>}'
-                OutputPathsMap:
-                  key1: '$.key1'
-                OutputTemplate: '{"key1": <value1>}'
-              RunCommand:
-                TimeoutSeconds: 60
-                Comment: 'Run every hour'
-                RetryPolicy:
-                  MaximumEventAgeInSeconds: 3600
 
-  # MyLambdaFunction:
-  #   Type: AWS::Serverless::Function
-  #   Properties:
-  #     PackageType: Image
-  #     Runtime: python3.12
-  #     Timeout: 120
-  #     Role: 'arn:aws:iam::463302649587:role/LabRole'
-  #   Metadata:
-  #     Dockerfile: Dockerfile
-  #     DockerContext: .
-  #     DockerTag: latest
-  #     Role: 'arn:aws:iam::463302649587:role/LabRole'
-  #   Events:
-        # ScheduleEvent:
-        #   Type: Schedule
-        #   Role: arn:aws:iam::463302649587:role/LabRole
-        #   Properties:
-        #     ScheduleExpression: rate(1 hour)
-    # MyFunction:
-    #   Type: AWS::Serverless::Function
-    #   Properties:
-    #     CodeUri: .
-    #     Handler: main.lambda_handler
-    #     Runtime: python3.12
-    #     Role: arn:aws:iam::400327223658:role/LabRole
-    #     Timeout: 120
+  ## SNS topic to send notifications when there is a new entry in the air quality database ##
+  AirQualityTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: AirQualityTopic
+
+  ## SNS subscription to send notifications to the endpoint ##
+  SNSSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Endpoint:
+        Ref: SubscriptionEndPoint
+      Protocol:
+        Ref: SubscriptionProtocol
+      TopicArn:
+        Ref: AirQualityTopic
+
+  ## Lambda function to send notifications when there is a new entry in the air quality database ##
+  NotificationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./notification_lambda/
+      Handler: main.lambda_handler
+      Runtime: python3.12
+      Architectures:
+        - x86_64
+      Timeout: 120
+      MemorySize: 2048
+      Events:
+        DDBEvent:
+          Type: DynamoDB
+          Properties:
+            Stream: !GetAtt AirQualityDB.StreamArn
+            StartingPosition: TRIM_HORIZON
+      Environment:
+        Variables:
+          SNS_TOPIC: !Ref AirQualityTopic
+      ## Policies --> https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-policy-templates.html
+      Policies:
+        - SNSPublishMessagePolicy:
+            TopicName: !GetAtt AirQualityTopic.TopicName
