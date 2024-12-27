@@ -6,13 +6,14 @@ from matplotlib.backends.backend_pdf import PdfPages
 import datetime
 import io
 import os
+import re
 
 dynamodb = boto3.resource('dynamodb')
 s3 = boto3.client('s3')
 
 def lambda_handler(event, context):
     table_name = os.environ['DYNAMODB_TABLE']
-    bucket_name = event['S3_BUCKET']
+    bucket_name = os.environ['S3_BUCKET']
     data = fetch_data(table_name)
     pdf_buffer = generate_plots(data)
     upload_to_s3(pdf_buffer, bucket_name)
@@ -32,8 +33,8 @@ def generate_plots(data):
     stations = {}
     for item in data:
         station = item['station']
-        timestamp = datetime.datetime.strptime(item['timestamp'], "%Y-%m-%dT%H:%M:%S%z")
-        pm10 = float(item['pm10'].strip(' mg/m³'))
+        timestamp = datetime.datetime.strptime(item['timestamp'], "%Y-%m-%dT%H:%M:%S.%f%z")
+        pm10 = float(re.sub('[^\d.]+', '', item['pm10']))
         
         if station not in stations:
             stations[station] = []

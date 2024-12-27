@@ -6,6 +6,8 @@ Parameters:
   SubscriptionEndPoint:
     Type: String
     Description: The endpoint that receives notifications.
+    Default: 'manuel.brazalez@alu.uclm.es'
+
   ## The subscription protocol ##
   SubscriptionProtocol:
     Type: String
@@ -20,13 +22,17 @@ Parameters:
     - application
     - lambda
     Default: email
+  ## The S3 bucket name ##
+  S3BucketName:
+    Type: String
+    Description: The name of the S3 bucket
+    Default: 'aqm-bucket'  
 #########################################################################
 Resources:
   ## DynamoDB Table to store the air quality data ##
   AirQualityDB:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: AirQualityDB
       AttributeDefinitions:
         - AttributeName: "station"
           AttributeType: "S"
@@ -46,6 +52,7 @@ Resources:
   ## Lambda function to scrape the air quality data ##
   SeleniumFunction:
     Type: AWS::Serverless::Function
+    DependsOn: AirQualityDB
     Properties:
       PackageType: Image
       Architectures:
@@ -56,7 +63,7 @@ Resources:
         ScheduleEvent:
           Type: ScheduleV2
           Properties:
-            ScheduleExpression: "rate(24 hours)"
+            ScheduleExpression: "rate(1 hour)"
       Environment:
         Variables:
           DYNAMODB_TABLE: !Ref AirQualityDB
@@ -84,12 +91,18 @@ Resources:
         Ref: SubscriptionProtocol
       TopicArn:
         Ref: AirQualityTopic
+  
+  ## S3 Bucket for saving the generated reports ##
+  AirQualityReportsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref S3BucketName
 
-  ## Lambda function to send notifications when there is a new entry in the air quality database ##
-  NotificationFunction:
+  # ## Lambda function to generate reports ##
+  ReportsLambda:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: ./notification_lambda/
+      CodeUri: ./reports_lambda/
       Handler: main.lambda_handler
       Runtime: python3.12
       Architectures:
@@ -104,50 +117,42 @@ Resources:
             StartingPosition: TRIM_HORIZON
       Environment:
         Variables:
-          SNS_TOPIC: !Ref AirQualityTopic
+          S3_BUCKET: !Ref AirQualityReportsBucket
+          DYNAMODB_TABLE: !Ref AirQualityDB
       Policies:
-        - SNSPublishMessagePolicy:
-            TopicName: !GetAtt AirQualityTopic.TopicName
-  
-  ## S3 Bucket for saving the generated reports ##
-  AirQualityReportsBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: air-quality-reports-bucket
-  ## S3 Bucket policies ##
-  AirQualityReportsBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: 
-        Ref: AirQualityReportsBucket
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal: '*'
-            Action: 's3:GetObject'
-            Resource:
-              Fn::Join:
-                - ''
-                - - 'arn:aws:s3:::'
-                  - Ref: 'AirQualityReportsBucket'
-                  - '/*'    
+        - DynamoDBReadPolicy:
+            TableName: !Ref AirQualityDB
+        - S3WritePolicy:
+            BucketName: !Ref S3BucketName
 
-  ## Lambda function to generate reports ##
-  ReportsLambda:
+  # Lambda function to send notifications when there is a new report ready ##
+  NotificationFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: ./reports_lambda/
+      CodeUri: ./notification_lambda/
       Handler: main.lambda_handler
       Runtime: python3.12
       Architectures:
         - x86_64
       Timeout: 120
       MemorySize: 2048
+      Policies:
+        - SNSPublishMessagePolicy:
+            TopicName: !GetAtt AirQualityTopic.TopicName
+      Events:
+        S3Event:
+          Type: S3
+          Properties:
+            Bucket: !Ref AirQualityReportsBucket
+            Events: ['s3:ObjectCreated:*', 's3:ObjectRemoved:*']     
       Environment:
         Variables:
-          S3_BUCKET: !Ref AirQualityReportsBucket
-          DYNAMODB_TABLE: !Ref AirQualityDB
-      Policies:
-        - S3WritePolicy:
-            BucketName: !Ref AirQualityReportsBucket
+          SNS_TOPIC: !Ref AirQualityTopic
+
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt NotificationFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: 's3.amazonaws.com'
+      SourceArn: !GetAtt AirQualityReportsBucket.Arn
