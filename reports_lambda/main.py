@@ -59,5 +59,11 @@ def generate_plots(data):
     return pdf_buffer
 
 def upload_to_s3(pdf_buffer, bucket_name):
-    s3.upload_fileobj(pdf_buffer, bucket_name, 'air_quality_report.pdf')
+    s3.upload_fileobj(
+        pdf_buffer,
+        bucket_name,
+        'air_quality_report.pdf',
+        ExtraArgs={'ContentType': 'application/pdf'}
+    )
+
 

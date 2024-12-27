@@ -26,7 +26,7 @@ Parameters:
   S3BucketName:
     Type: String
     Description: The name of the S3 bucket
-    Default: 'aqm-bucket'  
+    Default: 'aqm-bucket-ssn-2024'  
 #########################################################################
 Resources:
   ## DynamoDB Table to store the air quality data ##
@@ -97,6 +97,24 @@ Resources:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Ref S3BucketName
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: error.html
+      PublicAccessBlockConfiguration:
+        BlockPublicPolicy: false
+      
+
+  ## Bucket policy to allow public access ##      
+  BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref AirQualityReportsBucket
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action: 's3:GetObject'
+            Resource: !Sub 'arn:aws:s3:::${AirQualityReportsBucket}/*'
 
   # ## Lambda function to generate reports ##
   ReportsLambda:
@@ -148,7 +166,9 @@ Resources:
       Environment:
         Variables:
           SNS_TOPIC: !Ref AirQualityTopic
+          S3_BUCKET: !Ref S3BucketName
 
+  ## Lambda invoke permission to allow S3 to invoke the notification function ##
   LambdaInvokePermission:
     Type: AWS::Lambda::Permission
     Properties:
