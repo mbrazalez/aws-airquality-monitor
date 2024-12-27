@@ -106,7 +106,6 @@ Resources:
       Environment:
         Variables:
           SNS_TOPIC: !Ref AirQualityTopic
-      ## Policies --> https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-policy-templates.html
       Policies:
         - SNSPublishMessagePolicy:
             TopicName: !GetAtt AirQualityTopic.TopicName
