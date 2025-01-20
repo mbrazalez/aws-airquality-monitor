@@ -55,6 +55,7 @@ Resources:
     Type: AWS::Serverless::Function
     DependsOn: AirQualityDB
     Properties:
+      Role: LabRole
       PackageType: Image
       Architectures:
         - x86_64
@@ -65,11 +66,13 @@ Resources:
           Type: ScheduleV2
           Properties:
             ScheduleExpression: "rate(1 hour)"
+            RoleArn: LabRole
+
       Environment:
         Variables:
           DYNAMODB_TABLE: !Ref AirQualityDB
       Policies:
-        - DynamoDBCrudPolicy:
+        - DynamoDBWritePolicy:
             TableName: !Ref AirQualityDB
     Metadata:
       Dockerfile: Dockerfile
@@ -123,6 +126,7 @@ Resources:
       CodeUri: ./reports_lambda/
       Handler: main.lambda_handler
       Runtime: python3.12
+      Role: LabRole
       Architectures:
         - x86_64
       Timeout: 120
@@ -150,6 +154,7 @@ Resources:
       CodeUri: ./notification_lambda/
       Handler: main.lambda_handler
       Runtime: python3.12
+      Role: LabRole
       Architectures:
         - x86_64
       Timeout: 120
@@ -162,7 +167,7 @@ Resources:
           Type: S3
           Properties:
             Bucket: !Ref AirQualityReportsBucket
-            Events: ['s3:ObjectCreated:*', 's3:ObjectRemoved:*']     
+            Events: ['s3:ObjectCreated:*']     
       Environment:
         Variables:
           SNS_TOPIC: !Ref AirQualityTopic
